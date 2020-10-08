@@ -105,7 +105,7 @@ export default class Helm2CattleOperator extends Operator {
   }
 
   protected isCattleAppResource(name: string, resource: any) {
-    const NAME_REGEX = new RegExp(`^${name}`, 'g');
+    const NAME_REGEX = new RegExp(`${name}`, 'g');
     return NAME_REGEX.test(resource.metadata.name);
   }
 

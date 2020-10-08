@@ -1,6 +1,6 @@
 {
   "name": "@operators/helm2cattle",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "pass the cattle app id down to resources deployed by the helm operator",
   "keywords": [
     "helm2cattle"
