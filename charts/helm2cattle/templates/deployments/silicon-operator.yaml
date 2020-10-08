@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "helm2cattle.fullname" . }}-helm2cattle
+  labels:
+    app: {{ template "helm2cattle.name" . }}-helm2cattle
+    chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "helm2cattle.name" . }}-helm2cattle
+      release: {{ .Release.Name }}
+  strategy:
+    type: {{ .Values.config.updateStrategy }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "helm2cattle.name" . }}-helm2cattle
+        release: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ template "helm2cattle.fullname" . }}
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 89
+              preference:
+                matchExpressions:
+                  - key: application/state
+                    operator: In
+                    values:
+                      - stateless
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 90
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - {{ template "helm2cattle.name" . }}-helm2cattle
+      containers:
+        - name: {{ template "helm2cattle.fullname" . }}-helm2cattle
+          image: {{ .Values.images.helm2cattle.repository }}:{{ .Values.images.helm2cattle.tag }}
+          imagePullPolicy: {{ .Values.config.imagePullPolicy }}
+          # resources:
+          #   requests:
+          #     cpu: {{ .Values.config.helm2cattle.resources.requests.cpu }}
+          #     memory: {{ .Values.config.helm2cattle.resources.requests.memory }}
+          #   limits:
+          #     cpu: {{ .Values.config.helm2cattle.resources.limits.cpu }}
+          #     memory: {{ .Values.config.helm2cattle.resources.limits.memory }}
+          env: []
+        - name: {{ template "helm2cattle.fullname" . }}-kubectl
+          image: bitnami/kubectl:1.17.12
+          imagePullPolicy: {{ .Values.config.imagePullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              kubectl proxy

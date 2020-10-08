@@ -1,0 +1,74 @@
+categories:
+  - Server
+questions:
+  # Config
+  - variable: config.imagePullPolicy
+    default: IfNotPresent
+    description: ''
+    type: enum
+    options:
+      - IfNotPresent
+      - Always
+    required: true
+    label: 'pull policy'
+    group: Config
+  - variable: config.updateStrategy
+    default: RollingUpdate
+    description: ''
+    type: enum
+    options:
+      - RollingUpdate
+      - Recreate
+      - OnDelete
+    required: true
+    label: 'update strategy'
+    group: Config
+  # - variable: config.helm2cattle.resources.defaults
+  #   default: true
+  #   description: ''
+  #   type: boolean
+  #   required: true
+  #   label: 'helm2cattle resources defaults'
+  #   show_subquestion_if: false
+  #   group: Config
+  #   subquestions:
+  #     - variable: config.helm2cattle.resources.requests.cpu
+  #       default: 100m
+  #       description: ''
+  #       type: string
+  #       required: true
+  #       label: 'helm2cattle resources requests cpu'
+  #     - variable: config.helm2cattle.resources.requests.memory
+  #       default: 128Mi
+  #       description: ''
+  #       type: string
+  #       required: true
+  #       label: 'helm2cattle resources requests memory'
+  #     - variable: config.helm2cattle.resources.limits.cpu
+  #       default: 500m
+  #       description: ''
+  #       type: string
+  #       required: true
+  #       label: 'helm2cattle resources limits cpu'
+  #     - variable: config.helm2cattle.resources.limits.memory
+  #       default: 256Mi
+  #       description: ''
+  #       type: string
+  #       required: true
+  #       label: 'helm2cattle resources limits memory'
+
+  # Images
+  - variable: images.helm2cattle.repository
+    default: codejamninja/operators_helm2cattle
+    description: ''
+    type: string
+    required: true
+    label: 'helm2cattle repository'
+    group: Images
+  - variable: images.helm2cattle.tag
+    default: 0.0.1
+    description: ''
+    type: string
+    required: true
+    label: 'helm2cattle tag'
+    group: Images
