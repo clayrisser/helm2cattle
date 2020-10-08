@@ -2,7 +2,7 @@ name: helm2cattle
 apiVersion: v1
 home: https://codejam.ninja
 icon: ''
-version: 0.0.1
+version: 0.0.2
 appVersion: latest
 description: 'pass the cattle app id down to resources deployed by the helm operator'
 keywords:

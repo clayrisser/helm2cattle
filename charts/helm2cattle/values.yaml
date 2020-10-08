@@ -1,7 +1,7 @@
 images:
   helm2cattle:
     repository: codejamninja/operators_helm2cattle
-    tag: 0.0.1
+    tag: 0.0.2
 
 config:
   clusterProvider: infrastructure
