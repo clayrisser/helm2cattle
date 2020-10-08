@@ -1,12 +1,12 @@
-import Velero from './velero';
+import Helm2CattleOperator from './helm2cattle';
 import config from './config';
 
 (async () => {
-  const velero = new Velero(config);
-  await velero.start();
+  const helm2Cattle = new Helm2CattleOperator(config);
+  await helm2Cattle.start();
 
   function exit(_reason: string) {
-    velero.stop();
+    helm2Cattle.stop();
     process.exit(0);
   }
 

@@ -1,9 +1,10 @@
-import { KubernetesObject } from '@kubernetes/client-node';
-
-export interface VeleroScheduleSpec {
-  [key: string]: any;
+export interface CustomResourceLookup {
+  group: string;
+  plural: string;
+  version: string;
+  kind: string;
 }
 
-export interface VeleroScheduleObject extends KubernetesObject {
-  spec: VeleroScheduleSpec;
+export interface ResourcesLookup {
+  [kind: string]: string;
 }
