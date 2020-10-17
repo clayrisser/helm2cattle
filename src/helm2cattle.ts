@@ -1,12 +1,19 @@
 import * as k8s from '@kubernetes/client-node';
+import _get from 'lodash.get';
+import newRegExp from 'newregexp';
+import ora from 'ora';
 import Operator, {
   ResourceEvent,
   ResourceEventType
 } from '@dot-i/k8s-operator';
-import ora from 'ora';
 import Logger from './logger';
 import { Config } from './config';
-import { CustomResourceLookup, ResourcesLookup } from './types';
+import {
+  CustomResourceLookup,
+  MatchItem,
+  Matcher,
+  ResourcesLookup
+} from './types';
 
 export default class Helm2CattleOperator extends Operator {
   objectApi: k8s.KubernetesObjectApi;
@@ -69,7 +76,6 @@ export default class Helm2CattleOperator extends Operator {
           }
           const resources = await this.getResources(e);
           const appId = e.object.metadata?.labels?.['io.cattle.field/appId'];
-          const name = e.object.metadata?.name || '';
           if (!appId) return;
           await Promise.all(
             resources.map(async (resource: k8s.KubernetesObject) => {
@@ -80,7 +86,7 @@ export default class Helm2CattleOperator extends Operator {
                 ) &&
                 !('io.cattle.field/appId' in (resource.metadata?.labels || {}))
               ) {
-                if (this.isCattleAppResource(name, resource)) {
+                if (await this.isCattleAppResource(resource)) {
                   const message = `label 'io.cattle.field/appId=${appId}' to '${resource.kind?.toLowerCase()}/${
                     resource.metadata?.name
                   }' in namespace '${resource.metadata?.namespace}'`;
@@ -104,9 +110,57 @@ export default class Helm2CattleOperator extends Operator {
     );
   }
 
-  protected isCattleAppResource(name: string, resource: any) {
-    const NAME_REGEX = new RegExp(`${name}`, 'g');
-    return NAME_REGEX.test(resource.metadata.name);
+  protected async isCattleAppResource(resource: any) {
+    const { metadata } = resource;
+    if (!metadata.name || !metadata.namespace) return false;
+    try {
+      const { body } = await this.k8sApi.readNamespacedConfigMap(
+        'some-name',
+        metadata.namespace
+      );
+      if (!body.data?.cattle_app_matcher) return false;
+      const cattleAppMatcher = Helm2CattleOperator.matcher2RegexMatcher(
+        body.data.cattle_app_matcher
+      );
+      if (Array.isArray(cattleAppMatcher)) {
+        return !!cattleAppMatcher.find(
+          (matcherItems: MatchItem<RegExp> | MatchItem<RegExp>[]) => {
+            if (Array.isArray(matcherItems)) {
+              return !matcherItems.find((matcherItem: MatchItem<RegExp>) => {
+                if (matcherItem instanceof RegExp) {
+                  const REGEX = matcherItem;
+                  return !REGEX.test(metadata.name);
+                }
+                const REGEX = matcherItem.regex;
+                return !REGEX.test(_get(resource, matcherItem.path));
+              });
+            } else {
+              if (matcherItems instanceof RegExp) {
+                const REGEX = matcherItems;
+                return REGEX.test(metadata.name);
+              }
+              const REGEX = matcherItems.regex;
+              return REGEX.test(_get(resource, matcherItems.path));
+            }
+          }
+        );
+      }
+      if (cattleAppMatcher instanceof RegExp) {
+        const REGEX = cattleAppMatcher;
+        return REGEX.test(metadata.name);
+      }
+      const REGEX = cattleAppMatcher.regex;
+      return REGEX.test(_get(resource, cattleAppMatcher.path));
+    } catch (err) {
+      this.spinner.fail(
+        [
+          err.message || '',
+          err.body?.message || err.response?.body?.message || ''
+        ].join(': ')
+      );
+      if (this.config.debug) this.log.error(err);
+    }
+    return false;
   }
 
   protected async labelResourceAppId(
@@ -196,5 +250,27 @@ export default class Helm2CattleOperator extends Operator {
           })
         )
       : [];
+  }
+
+  static matcher2RegexMatcher(stringMatcher: Matcher<string>): Matcher<RegExp> {
+    if (Array.isArray(stringMatcher)) {
+      return stringMatcher.map(
+        (matchItems: MatchItem<string> | MatchItem<string>[]) => {
+          if (Array.isArray(matchItems)) {
+            return matchItems.map((matchItem: MatchItem<string>) => {
+              return newRegExp(
+                typeof matchItem === 'string' ? matchItem : matchItem.regex
+              );
+            });
+          }
+          return newRegExp(
+            typeof matchItems === 'string' ? matchItems : matchItems.regex
+          );
+        }
+      );
+    }
+    return newRegExp(
+      typeof stringMatcher === 'string' ? stringMatcher : stringMatcher.regex
+    );
   }
 }
