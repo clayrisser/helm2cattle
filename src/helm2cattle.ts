@@ -16,25 +16,15 @@ import {
 } from './types';
 
 export default class Helm2CattleOperator extends Operator {
-  objectApi: k8s.KubernetesObjectApi;
+  static labelNamespace = 'dev.siliconhills.helm2cattle';
 
-  customObjectsApi: k8s.CustomObjectsApi;
+  static group = 'helm.fluxcd.io';
 
-  appsV1Api: k8s.AppsV1Api;
+  static kind = 'HelmRelease';
 
-  networkingV1betaApi: k8s.NetworkingV1beta1Api;
+  static plural = 'helmreleases';
 
-  labelNamespace = 'dev.siliconhills.helm2cattle';
-
-  spinner = ora();
-
-  group = 'helm.fluxcd.io';
-
-  kind = 'HelmRelease';
-
-  plural = 'helmreleases';
-
-  version = 'v1';
+  static version = 'v1';
 
   static customResourcesLookup: CustomResourceLookup[] = [];
 
@@ -51,6 +41,16 @@ export default class Helm2CattleOperator extends Operator {
     StatefulSet: 'appsV1Api'
   };
 
+  spinner = ora();
+
+  objectApi: k8s.KubernetesObjectApi;
+
+  customObjectsApi: k8s.CustomObjectsApi;
+
+  appsV1Api: k8s.AppsV1Api;
+
+  networkingV1betaApi: k8s.NetworkingV1beta1Api;
+
   constructor(protected config: Config, protected log = new Logger()) {
     super(log);
     this.objectApi = k8s.KubernetesObjectApi.makeApiClient(this.kubeConfig);
@@ -63,9 +63,9 @@ export default class Helm2CattleOperator extends Operator {
 
   protected async init() {
     await this.watchResource(
-      this.group,
-      this.version,
-      this.plural,
+      Helm2CattleOperator.group,
+      Helm2CattleOperator.version,
+      Helm2CattleOperator.plural,
       async (e) => {
         try {
           if (
@@ -76,17 +76,18 @@ export default class Helm2CattleOperator extends Operator {
           }
           const resources = await this.getResources(e);
           const appId = e.object.metadata?.labels?.['io.cattle.field/appId'];
+          const name = e.object.metadata?.name || '';
           if (!appId) return;
           await Promise.all(
             resources.map(async (resource: k8s.KubernetesObject) => {
               if (
                 !(
-                  `${this.labelNamespace}/touched` in
+                  `${Helm2CattleOperator.labelNamespace}/touched` in
                   (resource.metadata?.labels || {})
                 ) &&
                 !('io.cattle.field/appId' in (resource.metadata?.labels || {}))
               ) {
-                if (await this.isCattleAppResource(resource)) {
+                if (await this.isCattleAppResource(name, resource)) {
                   const message = `label 'io.cattle.field/appId=${appId}' to '${resource.kind?.toLowerCase()}/${
                     resource.metadata?.name
                   }' in namespace '${resource.metadata?.namespace}'`;
@@ -110,17 +111,23 @@ export default class Helm2CattleOperator extends Operator {
     );
   }
 
-  protected async isCattleAppResource(resource: any) {
+  protected async isCattleAppResource(releaseName: string, resource: any) {
     const { metadata } = resource;
     if (!metadata.name || !metadata.namespace) return false;
     try {
-      const { body } = await this.k8sApi.readNamespacedConfigMap(
-        'some-name',
+      const { body } = await this.k8sApi.listNamespacedConfigMap(
         metadata.namespace
       );
-      if (!body.data?.cattle_app_matcher) return false;
+      const configMap = body.items.find(
+        (item: k8s.V1ConfigMap) =>
+          item.metadata?.labels?.[
+            `${Helm2CattleOperator.labelNamespace}/release`
+          ] === releaseName
+      );
+      if (!configMap) return false;
+      if (!configMap.data?.cattle_app_matcher) return false;
       const cattleAppMatcher = Helm2CattleOperator.matcher2RegexMatcher(
-        body.data.cattle_app_matcher
+        configMap.data.cattle_app_matcher
       );
       if (Array.isArray(cattleAppMatcher)) {
         return !!cattleAppMatcher.find(
@@ -223,7 +230,7 @@ export default class Helm2CattleOperator extends Operator {
           value: {
             ...(body.metadata?.labels || {}),
             'io.cattle.field/appId': appId,
-            [`${this.labelNamespace}/touched`]: Date.now().toString()
+            [`${Helm2CattleOperator.labelNamespace}/touched`]: Date.now().toString()
           }
         }
       ],
