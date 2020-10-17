@@ -148,14 +148,13 @@ export default class Helm2CattleOperator extends Operator {
                 const REGEX = matcherItem.regex;
                 return !REGEX.test(_get(resource, matcherItem.path));
               });
-            } else {
-              if (matcherItems instanceof RegExp) {
-                const REGEX = matcherItems;
-                return REGEX.test(metadata.name);
-              }
-              const REGEX = matcherItems.regex;
-              return REGEX.test(_get(resource, matcherItems.path));
             }
+            if (matcherItems instanceof RegExp) {
+              const REGEX = matcherItems;
+              return REGEX.test(metadata.name);
+            }
+            const REGEX = matcherItems.regex;
+            return REGEX.test(_get(resource, matcherItems.path));
           }
         );
       }
@@ -272,19 +271,25 @@ export default class Helm2CattleOperator extends Operator {
         (matchItems: MatchItem<string> | MatchItem<string>[]) => {
           if (Array.isArray(matchItems)) {
             return matchItems.map((matchItem: MatchItem<string>) => {
-              return newRegExp(
-                typeof matchItem === 'string' ? matchItem : matchItem.regex
-              );
+              if (typeof matchItem === 'string') return newRegExp(matchItem);
+              return {
+                ...matchItem,
+                regex: newRegExp(matchItem.regex)
+              };
             });
           }
-          return newRegExp(
-            typeof matchItems === 'string' ? matchItems : matchItems.regex
-          );
+          if (typeof matchItems === 'string') return newRegExp(matchItems);
+          return {
+            ...matchItems,
+            regex: newRegExp(matchItems.regex)
+          };
         }
       );
     }
-    return newRegExp(
-      typeof stringMatcher === 'string' ? stringMatcher : stringMatcher.regex
-    );
+    if (typeof stringMatcher === 'string') return newRegExp(stringMatcher);
+    return {
+      ...stringMatcher,
+      regex: newRegExp(stringMatcher.regex)
+    };
   }
 }
