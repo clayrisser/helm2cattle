@@ -1,4 +1,5 @@
 import * as k8s from '@kubernetes/client-node';
+import YAML from 'yaml';
 import _get from 'lodash.get';
 import newRegExp from 'newregexp';
 import ora from 'ora';
@@ -126,11 +127,17 @@ export default class Helm2CattleOperator extends Operator {
       );
       if (!configMap) return false;
       if (!configMap.data?.cattle_app_matcher) return false;
-      const cattleAppMatcher = Helm2CattleOperator.matcher2RegexMatcher(
-        configMap.data.cattle_app_matcher
+      let cattleAppMatcher: Matcher<string> = configMap.data
+        .cattle_app_matcher as string;
+      if (!cattleAppMatcher) return false;
+      try {
+        cattleAppMatcher = YAML.parse(cattleAppMatcher);
+      } catch (err) {}
+      const matcher = Helm2CattleOperator.matcher2RegexMatcher(
+        cattleAppMatcher
       );
-      if (Array.isArray(cattleAppMatcher)) {
-        return !!cattleAppMatcher.find(
+      if (Array.isArray(matcher)) {
+        return !!matcher.find(
           (matcherItems: MatchItem<RegExp> | MatchItem<RegExp>[]) => {
             if (Array.isArray(matcherItems)) {
               return !matcherItems.find((matcherItem: MatchItem<RegExp>) => {
@@ -152,12 +159,12 @@ export default class Helm2CattleOperator extends Operator {
           }
         );
       }
-      if (cattleAppMatcher instanceof RegExp) {
-        const REGEX = cattleAppMatcher;
+      if (matcher instanceof RegExp) {
+        const REGEX = matcher;
         return REGEX.test(metadata.name);
       }
-      const REGEX = cattleAppMatcher.regex;
-      return REGEX.test(_get(resource, cattleAppMatcher.path));
+      const REGEX = matcher.regex;
+      return REGEX.test(_get(resource, matcher.path));
     } catch (err) {
       this.spinner.fail(
         [
