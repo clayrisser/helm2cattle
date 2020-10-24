@@ -30,15 +30,15 @@ export default class Helm2CattleOperator extends Operator {
   static customResourcesLookup: CustomResourceLookup[] = [];
 
   static resourcesLookup: ResourcesLookup = {
-    ConfigMap: 'k8sApi',
+    ConfigMap: ['k8sApi', 'coreV1Api'],
     ControllerRevision: 'appsV1Api',
     Deployment: 'appsV1Api',
     Ingress: 'networkingV1betaApi',
     PersistentVolumeClaim: 'k8sApi',
-    Pod: 'k8sApi',
+    Pod: ['k8sApi', 'coreV1Api'],
     ReplicaSet: 'appsV1Api',
-    Secret: 'k8sApi',
-    Service: 'k8sApi',
+    Secret: ['k8sApi', 'coreV1Api'],
+    Service: ['k8sApi', 'coreV1Api'],
     StatefulSet: 'appsV1Api'
   };
 
@@ -52,11 +52,14 @@ export default class Helm2CattleOperator extends Operator {
 
   networkingV1betaApi: k8s.NetworkingV1beta1Api;
 
+  coreV1Api: k8s.CoreV1Api;
+
   constructor(protected config: Config, protected log = new Logger()) {
     super(log);
     this.objectApi = k8s.KubernetesObjectApi.makeApiClient(this.kubeConfig);
     this.customObjectsApi = this.kubeConfig.makeApiClient(k8s.CustomObjectsApi);
     this.appsV1Api = this.kubeConfig.makeApiClient(k8s.AppsV1Api);
+    this.coreV1Api = this.kubeConfig.makeApiClient(k8s.CoreV1Api);
     this.networkingV1betaApi = this.kubeConfig.makeApiClient(
       k8s.NetworkingV1beta1Api
     );
@@ -69,12 +72,7 @@ export default class Helm2CattleOperator extends Operator {
       Helm2CattleOperator.plural,
       async (e) => {
         try {
-          if (
-            e.type !== ResourceEventType.Added &&
-            e.type !== ResourceEventType.Modified
-          ) {
-            return;
-          }
+          if (e.type === ResourceEventType.Deleted) return;
           const resources = await this.getResources(e);
           const appId = e.object.metadata?.labels?.['io.cattle.field/appId'];
           const name = e.object.metadata?.name || '';
@@ -181,8 +179,10 @@ export default class Helm2CattleOperator extends Operator {
     appId: string
   ): Promise<void> {
     if (!resource.kind) return;
+    const lookedUpResource = Helm2CattleOperator.resourcesLookup[resource.kind];
+    if (!lookedUpResource) return;
     const result = await this.patchNamespaced(
-      Helm2CattleOperator.resourcesLookup[resource.kind],
+      Array.isArray(lookedUpResource) ? lookedUpResource[0] : lookedUpResource,
       resource.kind,
       resource,
       appId
@@ -205,11 +205,22 @@ export default class Helm2CattleOperator extends Operator {
           ).body;
         }
       ),
-      ...Object.entries(
-        Helm2CattleOperator.resourcesLookup
-      ).map(async ([kind, api]: [string, string]) =>
-        this.listNamespaced(api, kind, e.meta.namespace)
-      )
+      ...(
+        await Promise.all(
+          Object.entries(Helm2CattleOperator.resourcesLookup).map(
+            async ([kind, api]: [string, string | string[]]) => {
+              if (!Array.isArray(api)) {
+                return [this.listNamespaced(api, kind, e.meta.namespace)];
+              }
+              return Promise.all(
+                api.map(async (api: string) => {
+                  return this.listNamespaced(api, kind, e.meta.namespace);
+                })
+              );
+            }
+          )
+        )
+      ).flat()
     ];
     return (await Promise.all(promises)).flat();
   }

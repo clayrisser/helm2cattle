@@ -6,7 +6,7 @@ export interface CustomResourceLookup {
 }
 
 export interface ResourcesLookup {
-  [kind: string]: string;
+  [kind: string]: string | string[];
 }
 
 export type Matcher<T> = MatchItem<T> | (MatchItem<T> | MatchItem<T>[])[];
