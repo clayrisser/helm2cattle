@@ -4,7 +4,6 @@
 
 > pass the cattle app id down to resources deployed by the helm operator
 
-![](assets/helm2cattle.png)
 
 Please ★ this repo if you found it useful ★ ★ ★
 
